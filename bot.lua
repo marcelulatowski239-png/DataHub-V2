@@ -1,34 +1,57 @@
 local API_URL = "http://localhost:3000"
 local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 
-function scanItems()
+print("🤖 BOT URUCHOMIONY...")
+
+function scanAndReport()
     local itemsFound = {}
-    -- Tutaj bot szuka obiektów na mapie (przykład dla Steal a Brainrot)
+    -- SZUKANIE OBIEKTÓW (Dopasuj nazwy!)
     for _, obj in pairs(game.Workspace:GetDescendants()) do
-        if obj.Name == "BrainrotItem" or obj:FindFirstChild("Value") then 
+        if obj.Name == "BrainrotItem" or obj:FindFirstChild("Value") then
             table.insert(itemsFound, obj.Name)
         end
     end
-    return itemsFound
+
+    if #itemsFound > 0 then
+        print("✅ Znaleziono przedmioty! Wysyłam raport...")
+        local data = {
+            id = game.JobId,
+            items = itemsFound,
+            players = #game.Players:GetPlayers()
+        }
+        pcall(function()
+            HttpService:PostAsync(API_URL.."/report-items", HttpService:JSONEncode(data))
+        end)
+    else
+        print("❌ Nic nie znaleziono na tym serwerze.")
+    end
 end
 
-print("Bot skanuje serwer...")
-wait(5) -- Czas na zaladowanie mapy
+-- 1. Skanuj serwer
+task.wait(5) -- Czeka na załadowanie mapy
+scanAndReport()
 
-local data = {
-    id = game.JobId,
-    items = scanItems(),
-    players = #game.Players:GetPlayers()
-}
+-- 2. Przeskocz na inny serwer (Server Hop)
+task.wait(2)
+print("🚀 Szukam nowego serwera...")
 
--- Wysylka do laptopa
-pcall(function()
-    HttpService:PostAsync(API_URL.."/report-items", HttpService:JSONEncode(data))
-end)
+local function joinNewServer()
+    local success, res = pcall(function()
+        return HttpService:GetAsync(API_URL.."/get-new-server")
+    end)
+    
+    if success and res then
+        local srv = HttpService:JSONDecode(res)
+        if srv and srv.id then
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, srv.id)
+        end
+    end
+end
 
--- Teleportacja na nowy serwer
-local success, res = pcall(function() return HttpService:GetAsync(API_URL.."/get-new-server") end)
-if success then
-    local srv = HttpService:JSONDecode(res)
-    game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, srv.id)
+joinNewServer()
+
+-- Jeśli teleportacja zawiedzie, spróbuj ponownie za 10 sekund
+while task.wait(10) do
+    joinNewServer()
 end
